@@ -4,11 +4,14 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 export default function DashView() {
+
+  const loggedUser = JSON.parse(localStorage.getItem("user")); // <-- Added
+
   const [data, setData] = useState([]);
 
   const loadTransactions = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/transactions");
+      const res = await axios.get(`http://localhost:5000/transactions/${loggedUser?.id}`);
       setData(res.data);
     } catch (err) {
       console.log("Error fetching transactions:", err);
@@ -16,6 +19,17 @@ export default function DashView() {
   };
 
   useEffect(() => {
+    const completeLogin = async () => {
+      try {
+        await axios.post("http://localhost:5000/complete-first-login", {
+          user_id: loggedUser?.id
+        });
+      } catch (error) {
+        console.log("Error completing first login:", error);
+      }
+    };
+
+    completeLogin();
     loadTransactions();
   }, []);
 
@@ -47,7 +61,7 @@ export default function DashView() {
       <h2 className="text-center text-2xl font-semibold mb-4">All Transactions</h2>
 
       {data.length === 0 ? (
-        <p className="text-center text-gray-600">Loading...</p>
+        <p className="text-center text-gray-600">No data</p>
       ) : (
         data.map((t) => (
           <div

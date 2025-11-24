@@ -2,29 +2,39 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-const Login = () => {
+const Login = ({ setIsLoggedIn }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
 
-  const navigate = useNavigate(); // ← ADD THIS
+  const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
+
     try {
       const res = await axios.post("http://localhost:5000/login", {
         email,
         password,
       });
 
+      const user = res.data.user;
+
+      // 🔥 SAVE TOKEN (VERY IMPORTANT)
       localStorage.setItem("token", res.data.token);
 
-      setMessage("Login successful!");
+      // Save user ID
+      localStorage.setItem("user", JSON.stringify({ id: user.id }));
 
-      // 🔥 Navigate to Add Transaction page
-      setTimeout(() => {
-        navigate("/dashform");
-      }, 800);
+      // Update login state
+      setIsLoggedIn(true);
+
+      // 🔥 Redirect depending on first_login
+      if (user.first_login === 1) {
+        navigate("/dashview");
+      } else {
+        navigate("/transaction");
+      }
 
     } catch (err) {
       setMessage(err.response?.data?.error || "Login failed");

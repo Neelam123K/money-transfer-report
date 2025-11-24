@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 
 import Register from "./Component/Register";
 import Login from "./Component/Login";
 import DashForm from "./Component/DashForm";
+import Transaction from "./Component/Transaction";
 import DashView from "./Component/DashView";
 
 function App() {
@@ -71,6 +72,10 @@ function App() {
             <Route 
               path="/dashform" 
               element={isLoggedIn ? <DashForm /> : <Login setIsLoggedIn={setIsLoggedIn} />} 
+            />
+            <Route 
+              path="/transaction" 
+              element={isLoggedIn ? <Transaction /> : <Login setIsLoggedIn={setIsLoggedIn} />} 
             />
             <Route 
               path="/dashview" 

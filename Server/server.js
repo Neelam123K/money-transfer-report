@@ -1,5 +1,5 @@
 const express = require("express");
-const mysql = require("mysql2");
+const mysql = require("mysql2/promise");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -10,182 +10,248 @@ app.use(express.json());
 
 const JWT_SECRET = "MY_SECRET_123";
 
+let db;
+
 // ----------------- MySQL Connection -----------------
 
-const db = mysql.createConnection({
-  host: "localhost",
-  user: "sarang",
-  password: "sarang",
-  database: "neelam",
-});
+(async () => {
+  try {
+    db = await mysql.createConnection({
+      host: "localhost",
+      user: "sarang",
+      password: "sarang",
+      database: "neelam",
+    });
 
-db.connect((err) => {
-  if (err) {
-    console.error("❌ MySQL Connection Failed:", err);
-    return;
+    console.log("✅ MySQL Connected Successfully");
+
+    // AUTO TABLE CREATION
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255),
+        email VARCHAR(255) UNIQUE,
+        password VARCHAR(255),
+        first_login TINYINT(1) DEFAULT 1
+      )
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) UNIQUE
+      )
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255),
+        category VARCHAR(255),
+        category_type VARCHAR(20),
+        description TEXT,
+        image_url VARCHAR(500),
+        amount DECIMAL(10,2),
+        user_id INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+
+  } catch (err) {
+    console.error("❌ MySQL Connection Error:", err);
   }
-  console.log("✅ MySQL Connected Successfully");
-});
+})();
 
-// ----------------- Auto Create Tables -----------------
-
-// USERS TABLE
-db.query(`
-CREATE TABLE IF NOT EXISTS users (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255),
-  email VARCHAR(255) UNIQUE,
-  password VARCHAR(255)
-)
-`);
-
-// CATEGORIES TABLE
-db.query(`
-CREATE TABLE IF NOT EXISTS categories (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) UNIQUE
-)
-`);
-
-// TRANSACTIONS TABLE
-db.query(`
-CREATE TABLE IF NOT EXISTS transactions (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255),
-  category VARCHAR(255),
-  category_type VARCHAR(20), 
-  description TEXT,
-  image_url VARCHAR(500),
-  amount DECIMAL(10,2),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)
-`);
 
 // ----------------- REGISTER -----------------
 
 app.post("/register", async (req, res) => {
-  const { name, email, password } = req.body;
+  try {
+    const { name, email, password } = req.body;
 
-  if (!name || !email || !password)
-    return res.status(400).json({ error: "All fields are required!" });
+    const hashedPass = await bcrypt.hash(password, 10);
 
-  const hashedPass = await bcrypt.hash(password, 10);
+    await db.query(
+      "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
+      [name, email, hashedPass]
+    );
 
-  db.query(
-    "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
-    [name, email, hashedPass],
-    (err) => {
-      if (err) return res.status(400).json({ error: "Email already exists" });
-      res.json({ message: "User registered successfully" });
-    }
-  );
+    res.json({ message: "User registered successfully" });
+
+  } catch (err) {
+    res.status(400).json({ error: "Email already exists" });
+  }
 });
+
 
 // ----------------- LOGIN -----------------
 
-app.post("/login", (req, res) => {
+app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
-  db.query(
-    "SELECT * FROM users WHERE email = ?",
-    [email],
-    async (err, results) => {
-      if (err) return res.status(500).json({ error: "Server error" });
+  try {
+    const [rows] = await db.query(
+      "SELECT id, email, password, first_login FROM users WHERE email = ?",
+      [email]
+    );
 
-      if (results.length === 0)
-        return res.status(400).json({ error: "User not found" });
+    if (rows.length === 0)
+      return res.status(400).json({ error: "User not found" });
 
-      const user = results[0];
+    const user = rows[0];
 
-      const valid = await bcrypt.compare(password, user.password);
-      if (!valid)
-        return res.status(400).json({ error: "Incorrect password" });
+    const valid = await bcrypt.compare(password, user.password);
 
-      const token = jwt.sign(
-        { id: user.id, email: user.email },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
+    if (!valid)
+      return res.status(400).json({ error: "Incorrect password" });
 
-      res.json({ message: "Login successful", token, user });
-    }
-  );
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      message: "Login successful",
+      token,
+      user,
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
 });
+
 
 // ----------------- ADD CATEGORY -----------------
 
-app.post("/add-category", (req, res) => {
-  const { category } = req.body;
+app.post("/add-category", async (req, res) => {
+  try {
+    const { category } = req.body;
 
-  if (!category || !category.trim()) {
-    return res.status(400).json({ error: "Category is required" });
+    const [exists] = await db.query(
+      "SELECT * FROM categories WHERE name = ?",
+      [category]
+    );
+
+    if (exists.length > 0)
+      return res.status(400).json({ error: "Category already exists" });
+
+    await db.query("INSERT INTO categories (name) VALUES (?)", [category]);
+
+    res.json({ message: "Category added successfully" });
+
+  } catch (err) {
+    res.status(500).json({ error: "Database error" });
   }
-
-  db.query(
-    "INSERT INTO categories (name) VALUES (?)",
-    [category.trim()],
-    (err, result) => {
-      if (err)
-        return res.status(400).json({ error: "Category already exists" });
-
-      res.json({ message: "Category added", id: result.insertId });
-    }
-  );
 });
 
 
 // ----------------- GET CATEGORIES -----------------
 
-app.get("/categories", (req, res) => {
-  db.query("SELECT * FROM categories", (err, result) => {
-    if (err) return res.status(500).json({ error: "Database error" });
-    res.json(result);
-  });
+app.get("/categories", async (req, res) => {
+  const [rows] = await db.query("SELECT * FROM categories");
+  res.json(rows);
 });
+
 
 // ----------------- ADD TRANSACTION -----------------
 
-app.post("/add-transactions", (req, res) => {
-  const { name, category, category_type, description, image_url, amount } =
-    req.body;
+app.post("/transaction", async (req, res) => {
+  try {
+    const { name, category, category_type, description, image_url, amount, user_id } = req.body;
 
-  if (!name || !category || !category_type)
-    return res
-      .status(400)
-      .json({ error: "name, category, category_type are required" });
+    const sql = `
+      INSERT INTO transactions 
+      (name, category, category_type, description, image_url, amount, user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
 
-  const sql = `
-    INSERT INTO transactions 
-      (name, category, category_type, description, image_url, amount)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `;
+    const [result] = await db.query(sql, [
+      name, category, category_type, description, image_url, amount, user_id
+    ]);
 
-  db.query(
-    sql,
-    [
+    res.json({ message: "Transaction added", id: result.insertId });
+
+  } catch (err) {
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+
+// ----------------- GET TRANSACTIONS BY USER -----------------
+
+app.get("/transactions/:userId", async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM transactions WHERE user_id = ? ORDER BY id DESC",
+      [userId]
+    );
+    res.json(rows);
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Error fetching transactions" });
+  }
+});
+
+
+// ----------------- ADD TRANSACTION (UPDATED) -----------------
+
+app.post("/add-transaction", async (req, res) => {
+  try {
+    const {
       name,
       category,
       category_type,
-      description || null,
-      image_url || null,
-      amount || null,
-    ],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: "Database error" });
-      res.json({ message: "Transaction added", id: result.insertId });
-    }
-  );
+      description,
+      image_url,
+      amount,
+      user_id
+    } = req.body;
+
+    const sql = `
+      INSERT INTO transactions 
+      (name, category, category_type, description, image_url, amount, user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const [result] = await db.query(sql, [
+      name,
+      category,
+      category_type,
+      description,
+      image_url,
+      amount,
+      user_id,
+    ]);
+
+    res.json({ message: "Transaction added", id: result.insertId });
+
+  } catch (err) {
+    console.log("Transaction Error:", err);
+    res.status(500).json({ error: "Database error" });
+  }
 });
 
-// ----------------- GET TRANSACTIONS -----------------
 
-app.get("/transactions", (req, res) => {
-  db.query("SELECT * FROM transactions ORDER BY created_at DESC", (err, data) => {
-    if (err) return res.status(500).json({ error: "Database error" });
-    res.json(data);
-  });
+
+
+
+// ----------------- UPDATE FIRST LOGIN -----------------
+
+app.put("/first-login-update/:id", async (req, res) => {
+  const { id } = req.params;
+
+  await db.query("UPDATE users SET first_login = 0 WHERE id = ?", [id]);
+
+  res.json({ message: "First login updated" });
 });
 
-// ----------------- SERVER START -----------------
 
-app.listen(5000, () => console.log("🚀 Server running on port 5000"));
+// ----------------- SERVER RUN -----------------
+
+app.listen(5000, () => console.log("Server running on port 5000"));

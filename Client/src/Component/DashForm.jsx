@@ -3,7 +3,7 @@ import axios from "axios";
 
 const DashForm = () => {
   const [name, setName] = useState("");
-  const [categoryType, setCategoryType] = useState(""); 
+  const [categoryType, setCategoryType] = useState("");
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [amount, setAmount] = useState("");
@@ -14,13 +14,16 @@ const DashForm = () => {
   const [newCategory, setNewCategory] = useState("");
   const [message, setMessage] = useState("");
 
-  // ---------------- GET CATEGORIES ----------------
+  // Load logged-in user
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+  // ---------------- LOAD CATEGORIES ----------------
   const loadCategories = async () => {
     try {
       const res = await axios.get("http://localhost:5000/categories");
       setCategories(res.data);
     } catch (err) {
-      console.log(err);
+      console.log("Category load error:", err);
     }
   };
 
@@ -57,19 +60,25 @@ const DashForm = () => {
       return;
     }
 
+    if (!user?.id) {
+      setMessage("User not logged in");
+      return;
+    }
+
     try {
-      const res = await axios.post("http://localhost:5000/add-transaction", {
+      await axios.post("http://localhost:5000/add-transaction", {
         name,
         category: selectedCategory,
         category_type: categoryType,
         description,
         image_url: imageUrl,
         amount,
+        user_id: user.id, 
       });
 
       setMessage("Transaction Added Successfully!");
 
-      // Clear form
+      // Reset all fields
       setName("");
       setDescription("");
       setImageUrl("");
@@ -113,11 +122,15 @@ const DashForm = () => {
           onChange={(e) => setSelectedCategory(e.target.value)}
         >
           <option value="">Select Category</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.name}>
-              {c.name}
-            </option>
-          ))}
+          {categories.length > 0 ? (
+            categories.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))
+          ) : (
+            <option disabled>No categories found</option>
+          )}
         </select>
 
         {/* ADD CATEGORY */}
@@ -162,7 +175,7 @@ const DashForm = () => {
           onChange={(e) => setAmount(e.target.value)}
         />
 
-        {/* SUBMIT */}
+        {/* SUBMIT BUTTON */}
         <button
           className="w-full bg-green-600 text-white py-2 rounded-lg font-semibold"
           type="submit"
