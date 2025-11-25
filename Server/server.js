@@ -3,7 +3,7 @@ const mysql = require("mysql2/promise");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-
+const path = require("path");
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -238,9 +238,6 @@ app.post("/add-transaction", async (req, res) => {
 });
 
 
-
-
-
 // ----------------- UPDATE FIRST LOGIN -----------------
 
 app.put("/first-login-update/:id", async (req, res) => {
@@ -249,6 +246,16 @@ app.put("/first-login-update/:id", async (req, res) => {
   await db.query("UPDATE users SET first_login = 0 WHERE id = ?", [id]);
 
   res.json({ message: "First login updated" });
+});
+
+// ----------------- STATIC FRONTEND (Vite Build) -----------------
+
+const distPath = path.join(__dirname, "..", "Client", "dist");
+
+app.use(express.static(distPath));
+
+app.get(/.*/, (req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
 });
 
 
