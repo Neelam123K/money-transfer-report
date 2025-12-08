@@ -6,7 +6,8 @@ export default function ViewTransaction() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
+    const userData = JSON.parse(localStorage.getItem("user"));
+    const userId = userData?.id;
 
     if (!userId) {
       alert("User ID not found. Please login again.");

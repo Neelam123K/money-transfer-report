@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import {toast } from "react-toastify";
 
 const DashForm = () => {
   const [name, setName] = useState("");
   const [categoryType, setCategoryType] = useState("");
   const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
   const [amount, setAmount] = useState("");
 
   const [categories, setCategories] = useState([]);
@@ -23,7 +23,7 @@ const DashForm = () => {
       const res = await axios.get("http://localhost:5000/categories");
       setCategories(res.data);
     } catch (err) {
-      console.log("Category load error:", err);
+      toast.error("Error loading categories");
     }
   };
 
@@ -71,7 +71,6 @@ const DashForm = () => {
         category: selectedCategory,
         category_type: categoryType,
         description,
-        image_url: imageUrl,
         amount,
         user_id: user.id, 
       });
@@ -81,7 +80,6 @@ const DashForm = () => {
       // Reset all fields
       setName("");
       setDescription("");
-      setImageUrl("");
       setAmount("");
       setSelectedCategory("");
       setCategoryType("");
@@ -157,14 +155,6 @@ const DashForm = () => {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         ></textarea>
-
-        {/* IMAGE URL */}
-        <input
-          className="w-full border p-2 rounded"
-          placeholder="Image URL"
-          value={imageUrl}
-          onChange={(e) => setImageUrl(e.target.value)}
-        />
 
         {/* AMOUNT */}
         <input

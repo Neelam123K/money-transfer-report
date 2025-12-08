@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const Login = ({ setIsLoggedIn }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
 
   const navigate = useNavigate();
 
@@ -18,31 +19,38 @@ const Login = ({ setIsLoggedIn }) => {
         password,
       });
 
-      const user = res.data.user;
+      const user = res.data.user || res.data;
 
-      // 🔥 SAVE TOKEN (VERY IMPORTANT)
+      // Save token
       localStorage.setItem("token", res.data.token);
 
-      // Save user ID
-      localStorage.setItem("user", JSON.stringify({ id: user.id }));
+      // Save user data
+      localStorage.setItem(
+        "user",
+        JSON.stringify({
+          id: user.id,
+          name: user.name,
+        })
+      );
 
-      // Update login state
+      // Update login status
       setIsLoggedIn(true);
 
-      // 🔥 Redirect depending on first_login
-      if (user.first_login === 1) {
-        navigate("/dashview");
-      } else {
-        navigate("/transaction");
-      }
+      toast.success("Login successful!"); 
 
+      // Redirect
+      navigate("/dashview");
     } catch (err) {
-      setMessage(err.response?.data?.error || "Login failed");
+      const errorMessage = err.response?.data?.error || "Login failed";
+      toast.error(errorMessage); 
     }
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 px-4">
+      {/* Toast container */}
+      <ToastContainer position="top-center" autoClose={2000} />
+
       <div className="bg-white shadow-xl rounded-xl p-8 w-full max-w-md">
         <h2 className="text-2xl font-bold text-center text-blue-600 mb-6">
           Login
@@ -78,10 +86,6 @@ const Login = ({ setIsLoggedIn }) => {
             Login
           </button>
         </form>
-
-        {message && (
-          <p className="mt-4 text-center text-sm text-gray-700">{message}</p>
-        )}
       </div>
     </div>
   );

@@ -1,5 +1,7 @@
 import axios from "axios";
 import { useState } from "react";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 function Register() {
   const [form, setForm] = useState({
@@ -10,11 +12,14 @@ function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
+    try {
     const res = await axios.post("http://localhost:5000/register", form);
-
     console.log(res.data);
-    alert("Registered Successfully");
+    toast.success("Registered Successfully");
+    } catch (err) {
+      const errorMessage = err.response?.data?.error || "Registration failed";
+      toast.error(errorMessage); 
+    }
   };
 
   return (
