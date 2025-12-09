@@ -12,20 +12,31 @@ export default function DashView() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const loadTransactions = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get(
-        `http://localhost:5000/transactions/${loggedUser?.id}`
-      );
-      setData(res.data);
+  if (!loggedUser?.id) return;
+
+  setLoading(true);
+
+  try {
+    const res = await axios.get(
+      `http://localhost:5000/transactions/${loggedUser.id}`
+    );
+    setData(res.data);
+
+    // Show toast only once
+    if (!sessionStorage.getItem("transactionsLoaded")) {
       toast.success("Transactions loaded successfully!");
-    } catch (err) {
-      console.log("Error fetching transactions:", err);
-      toast.error("Failed to load transactions");
-    } finally {
-      setLoading(false);
+      sessionStorage.setItem("transactionsLoaded", "true");
     }
-  };
+
+  } catch (err) {
+    console.log("Error fetching transactions:", err);
+    toast.error("Failed to load transactions");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
 
   useEffect(() => {
     const completeLogin = async () => {
@@ -57,31 +68,31 @@ export default function DashView() {
   );
 
   const downloadPDF = () => {
-    try {
-      const doc = new jsPDF();
-      doc.text("Transaction Report", 14, 10);
+  try {
+    const doc = new jsPDF();
+    doc.text("Transaction Report", 14, 10);
 
-      const rows = filteredData.map((t) => [
-        t.id,
-        t.name,
-        t.category,
-        t.category_type,
-        t.amount || "-",
-        t.description || "-",
-      ]);
+    const rows = filteredData.map((t, index) => [
+      index + 1,                  // Serial Number
+      t.name,
+      t.category,
+      t.category_type,
+      t.amount || "-",
+      t.description || "-",
+    ]);
 
-      autoTable(doc, {
-        head: [["ID", "Name", "Category", "Type", "Amount", "Description"]],
-        body: rows,
-        startY: 20,
-      });
+    autoTable(doc, {
+      head: [["S.No", "Name", "Category", "Type", "Amount", "Description"]],
+      body: rows,
+      startY: 20,
+    });
 
-      doc.save("transaction_report.pdf");
-      toast.success("PDF downloaded successfully!");
-    } catch (error) {
-      toast.error("Error generating PDF");
-    }
-  };
+    doc.save("transaction_report.pdf");
+    toast.success("PDF downloaded successfully!");
+  } catch (error) {
+    toast.error("Error generating PDF");
+  }
+};
 
   return (
     <div className="w-[95%] max-w-5xl mx-auto mt-6 p-6 bg-white rounded-lg shadow-lg">
@@ -99,6 +110,8 @@ export default function DashView() {
         onChange={(e) => setSearchTerm(e.target.value)}
       />
 
+  
+
       {loading ? (
         <p className="text-center text-gray-600 py-10">Loading transactions...</p>
       ) : (
@@ -106,6 +119,7 @@ export default function DashView() {
           <table className="w-full border border-gray-300 rounded-lg overflow-hidden">
             <thead className="bg-blue-700 text-white">
               <tr>
+                <th className="px-4 py-2 text-left">S.No</th>
                 <th className="px-4 py-2 text-left">Name</th>
                 <th className="px-4 py-2 text-left">Category</th>
                 <th className="px-4 py-2 text-left">Type</th>
@@ -134,7 +148,7 @@ export default function DashView() {
                           : "bg-white"
                       }`}
                     >
-                      <td className="px-4 py-2">{t.name}</td>
+                      <td className="px-4 py-2">{index + 1}</td>                      <td className="px-4 py-2">{t.name}</td>
                       <td className="px-4 py-2">{t.category}</td>
                       <td className="px-4 py-2">{t.category_type}</td>
                       <td className="px-4 py-2 font-semibold">₹{t.amount}</td>

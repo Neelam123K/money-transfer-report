@@ -92,9 +92,10 @@ app.post("/login", async (req, res) => {
 
   try {
     const [rows] = await db.query(
-      "SELECT id, email, password, first_login FROM users WHERE email = ?",
-      [email]
-    );
+  "SELECT id, name, email, password, first_login FROM users WHERE email = ?",
+  [email]
+);
+
 
     if (rows.length === 0)
       return res.status(400).json({ error: "User not found" });
