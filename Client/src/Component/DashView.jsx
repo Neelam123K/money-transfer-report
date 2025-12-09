@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -11,32 +11,32 @@ export default function DashView() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
+  // new states for added features
+  const [filterType, setFilterType] = useState("all"); // all | debit | credit
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
   const loadTransactions = async () => {
-  if (!loggedUser?.id) return;
+    if (!loggedUser?.id) return;
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    const res = await axios.get(
-      `http://localhost:5000/transactions/${loggedUser.id}`
-    );
-    setData(res.data);
-
-    // Show toast only once
-    if (!sessionStorage.getItem("transactionsLoaded")) {
-      toast.success("Transactions loaded successfully!");
-      sessionStorage.setItem("transactionsLoaded", "true");
+    try {
+      const res = await axios.get(
+        `http://localhost:5000/transactions/${loggedUser.id}`
+      );
+      setData(res.data);
+            if (!sessionStorage.getItem("transactionsLoaded")) {
+        toast.success("Transactions loaded successfully!");
+        sessionStorage.setItem("transactionsLoaded", "true");
+      }
+    } catch (err) {
+      console.log("Error fetching transactions:", err);
+      toast.error("Failed to load transactions");
+    } finally {
+      setLoading(false);
     }
-
-  } catch (err) {
-    console.log("Error fetching transactions:", err);
-    toast.error("Failed to load transactions");
-  } finally {
-    setLoading(false);
-  }
-};
-
-
+  };
 
   useEffect(() => {
     const completeLogin = async () => {
@@ -60,39 +60,67 @@ export default function DashView() {
     loadTransactions();
   }, []);
 
-  const filteredData = data.filter(
-    (t) =>
-      t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.category_type.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // SEARCH + FILTER combined (without changing your search logic)
+  const filteredData = useMemo(() => {
+    const searchFiltered = data.filter(
+      (t) =>
+        t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t.category_type.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
-  const downloadPDF = () => {
-  try {
-    const doc = new jsPDF();
-    doc.text("Transaction Report", 14, 10);
+    if (filterType === "all") return searchFiltered;
+    return searchFiltered.filter((item) => item.category_type === filterType);
+  }, [data, searchTerm, filterType]);
 
-    const rows = filteredData.map((t, index) => [
-      index + 1,                  // Serial Number
-      t.name,
-      t.category,
-      t.category_type,
-      t.amount || "-",
-      t.description || "-",
-    ]);
+  // PAGINATION
+  const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
 
-    autoTable(doc, {
-      head: [["S.No", "Name", "Category", "Type", "Amount", "Description"]],
-      body: rows,
-      startY: 20,
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredData.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredData, currentPage]);
+
+  // PAGE TOTALS
+  const totals = useMemo(() => {
+    let debit = 0;
+    let credit = 0;
+
+    paginatedData.forEach((t) => {
+      if (t.category_type === "debit") debit += Number(t.amount || 0);
+      if (t.category_type === "credit") credit += Number(t.amount || 0);
     });
 
-    doc.save("transaction_report.pdf");
-    toast.success("PDF downloaded successfully!");
-  } catch (error) {
-    toast.error("Error generating PDF");
-  }
-};
+    return { debit, credit };
+  }, [paginatedData]);
+
+  // PDF DOWNLOAD (kept 100% same logic, only changed data source)
+  const downloadPDF = () => {
+    try {
+      const doc = new jsPDF();
+      doc.text("Transaction Report", 14, 10);
+
+      const rows = paginatedData.map((t, index) => [
+        index + 1,
+        t.name,
+        t.category,
+        t.category_type,
+        t.amount || "-",
+        t.description || "-",
+      ]);
+
+      autoTable(doc, {
+        head: [["S.No", "Name", "Category", "Type", "Amount", "Description"]],
+        body: rows,
+        startY: 20,
+      });
+
+      doc.save("transaction_report.pdf");
+      toast.success("PDF downloaded successfully!");
+    } catch (error) {
+      toast.error("Error generating PDF");
+    }
+  };
 
   return (
     <div className="w-[95%] max-w-5xl mx-auto mt-6 p-6 bg-white rounded-lg shadow-lg">
@@ -102,15 +130,31 @@ export default function DashView() {
         All Transactions
       </h2>
 
+      {/* SEARCH */}
       <input
         type="text"
         className="mb-4 w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         placeholder="Search transactions by name, category or type..."
         value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
+        onChange={(e) => {
+          setSearchTerm(e.target.value);
+          setCurrentPage(1);
+        }}
       />
 
-  
+      {/* FILTER */}
+      <select
+        value={filterType}
+        onChange={(e) => {
+          setFilterType(e.target.value);
+          setCurrentPage(1);
+        }}
+        className="mb-4 w-full px-4 py-2 border border-gray-300 rounded-lg"
+      >
+        <option value="all">All</option>
+        <option value="debit">Debit</option>
+        <option value="credit">Credit</option>
+      </select>
 
       {loading ? (
         <p className="text-center text-gray-600 py-10">Loading transactions...</p>
@@ -128,15 +172,15 @@ export default function DashView() {
               </tr>
             </thead>
             <tbody>
-              {data.length === 0 ? (
+              {paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-4 py-4 text-center text-gray-600">
+                  <td colSpan="6" className="px-4 py-4 text-center text-gray-600">
                     No transactions found
                   </td>
                 </tr>
               ) : (
-                data.map((t, index) => {
-                  const isMatch = filteredData.includes(t); // Highlight if matches search
+                paginatedData.map((t, index) => {
+                  const isMatch = filteredData.includes(t);
                   return (
                     <tr
                       key={t.id}
@@ -148,7 +192,8 @@ export default function DashView() {
                           : "bg-white"
                       }`}
                     >
-                      <td className="px-4 py-2">{index + 1}</td>                      <td className="px-4 py-2">{t.name}</td>
+                      <td className="px-4 py-2">{(currentPage - 1) * ITEMS_PER_PAGE + index + 1}</td>
+                      <td className="px-4 py-2">{t.name}</td>
                       <td className="px-4 py-2">{t.category}</td>
                       <td className="px-4 py-2">{t.category_type}</td>
                       <td className="px-4 py-2 font-semibold">₹{t.amount}</td>
@@ -162,6 +207,40 @@ export default function DashView() {
         </div>
       )}
 
+      {/* PAGE TOTALS */}
+      <div className="mt-4 p-3 bg-gray-100 rounded-lg">
+        <p>
+          <strong>Total Debit (this page): </strong>₹{totals.debit}
+        </p>
+        <p>
+          <strong>Total Credit (this page): </strong>₹{totals.credit}
+        </p>
+      </div>
+
+      {/* PAGINATION BUTTONS */}
+      <div className="flex justify-between mt-4">
+        <button
+          disabled={currentPage === 1}
+          onClick={() => setCurrentPage((p) => p - 1)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-400"
+        >
+          Prev
+        </button>
+
+        <p className="px-4 py-2">
+          Page {currentPage} of {totalPages}
+        </p>
+
+        <button
+          disabled={currentPage === totalPages}
+          onClick={() => setCurrentPage((p) => p + 1)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-400"
+        >
+          Next
+        </button>
+      </div>
+
+      {/* DOWNLOAD PDF BUTTON */}
       <button
         onClick={downloadPDF}
         className="w-full mt-6 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium"
